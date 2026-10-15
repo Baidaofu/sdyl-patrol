@@ -1,0 +1,21 @@
+# Gradle
+.gradle/
+build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android / IDE
+local.properties
+*.iml
+.idea/
+.DS_Store
+*.hprof
+
+# Keystore（真机调试用本机 keystore，不入库）
+*.jks
+*.keystore
+
+# 真机截图（不该入库）
+shots/

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">巡检</string>
+
+    <!-- 登录 -->
+    <string name="login_title">安全管控平台</string>
+    <string name="login_subtitle">移动巡检 · 轻量版</string>
+    <string name="login_server">服务器地址</string>
+    <string name="login_username">用户名</string>
+    <string name="login_password">密码</string>
+    <string name="login_action">登录</string>
+    <string name="login_server_hint">例如 supos.example.com:8443</string>
+    <string name="login_error_empty">请填写服务器、用户名和密码</string>
+
+    <!-- 导航 -->
+    <string name="nav_patrol">巡检</string>
+    <string name="nav_video">视频</string>
+    <string name="nav_me">我的</string>
+
+    <!-- 巡检任务 -->
+    <string name="patrol_title">我的巡检任务</string>
+    <string name="patrol_refresh">刷新</string>
+    <string name="patrol_sync_base">同步基础数据</string>
+    <string name="patrol_filter_all">全部</string>
+    <string name="patrol_filter_today">今日</string>
+    <string name="patrol_filter_running">进行中</string>
+    <string name="patrol_filter_todo">待检</string>
+    <string name="patrol_empty">没有巡检任务</string>
+    <string name="patrol_loading">正在获取巡检任务…</string>
+    <string name="patrol_table_no">单据编号</string>
+    <string name="patrol_task_name">任务名称</string>
+    <string name="patrol_plan_time">计划时间</string>
+    <string name="patrol_search_hint">搜索单据编号 / 路线</string>
+
+    <!-- 任务状态 -->
+    <string name="state_not_issued">待下发</string>
+    <string name="state_issued">待检</string>
+    <string name="state_running">进行中</string>
+    <string name="state_completed">已完成</string>
+    <string name="state_overdue">已逾期</string>
+    <string name="state_unknown">未知</string>
+
+    <!-- 任务类型 -->
+    <string name="type_daily">日常巡检</string>
+    <string name="type_spot">点检</string>
+    <string name="type_temp">临时巡检</string>
+
+    <!-- 我的 -->
+    <string name="me_title">我的</string>
+    <string name="me_server">服务器</string>
+    <string name="me_user">当前用户</string>
+    <string name="me_logout">退出登录</string>
+    <string name="me_settings">设置</string>
+
+    <!-- 通用 -->
+    <string name="common_retry">重试</string>
+    <string name="common_cancel">取消</string>
+    <string name="common_confirm">确定</string>
+    <string name="common_save">保存</string>
+    <string name="common_network_error">网络异常：%1$s</string>
+    <string name="video_placeholder">视频监控（下一步实现）</string>
+</resources>

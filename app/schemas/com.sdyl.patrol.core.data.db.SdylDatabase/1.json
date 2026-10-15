@@ -1,0 +1,440 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "38a8cf620162ed627e25289d7b238a43",
+    "entities": [
+      {
+        "tableName": "task",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `tableNo` TEXT, `taskName` TEXT, `taskType` TEXT, `taskStateId` TEXT, `taskStateLabel` TEXT, `routeTypeLabel` TEXT, `routeName` TEXT, `startTime` INTEGER NOT NULL, `endTime` INTEGER NOT NULL, `actualStartTime` INTEGER NOT NULL, `actualEndTime` INTEGER NOT NULL, `isTemp` INTEGER NOT NULL, `isInOrder` INTEGER NOT NULL, `areaCount` INTEGER NOT NULL, `groupName` TEXT, `stuffInCharge` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tableNo",
+            "columnName": "tableNo",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "taskName",
+            "columnName": "taskName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "taskType",
+            "columnName": "taskType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "taskStateId",
+            "columnName": "taskStateId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "taskStateLabel",
+            "columnName": "taskStateLabel",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "routeTypeLabel",
+            "columnName": "routeTypeLabel",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "routeName",
+            "columnName": "routeName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "startTime",
+            "columnName": "startTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endTime",
+            "columnName": "endTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actualStartTime",
+            "columnName": "actualStartTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actualEndTime",
+            "columnName": "actualEndTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isTemp",
+            "columnName": "isTemp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isInOrder",
+            "columnName": "isInOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "areaCount",
+            "columnName": "areaCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "groupName",
+            "columnName": "groupName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "stuffInCharge",
+            "columnName": "stuffInCharge",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "task_area",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `taskTableNo` TEXT NOT NULL, `taskId` TEXT, `name` TEXT, `code` TEXT, `sort` INTEGER NOT NULL, `totalNum` INTEGER NOT NULL, `finishNum` INTEGER NOT NULL, `abnormalNum` INTEGER NOT NULL, `isSigned` INTEGER NOT NULL, `isUpload` INTEGER NOT NULL, `signStaffName` TEXT, `cardTime` INTEGER, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskTableNo",
+            "columnName": "taskTableNo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskId",
+            "columnName": "taskId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "code",
+            "columnName": "code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sort",
+            "columnName": "sort",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalNum",
+            "columnName": "totalNum",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finishNum",
+            "columnName": "finishNum",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "abnormalNum",
+            "columnName": "abnormalNum",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isSigned",
+            "columnName": "isSigned",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isUpload",
+            "columnName": "isUpload",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "signStaffName",
+            "columnName": "signStaffName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cardTime",
+            "columnName": "cardTime",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "task_device",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `taskTableNo` TEXT NOT NULL, `areaId` TEXT NOT NULL, `code` TEXT, `name` TEXT, `areaNum` TEXT, `operationStatusName` TEXT, `sort` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskTableNo",
+            "columnName": "taskTableNo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "areaId",
+            "columnName": "areaId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "code",
+            "columnName": "code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "areaNum",
+            "columnName": "areaNum",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "operationStatusName",
+            "columnName": "operationStatusName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sort",
+            "columnName": "sort",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "work_item",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `taskTableNo` TEXT NOT NULL, `areaId` TEXT NOT NULL, `deviceId` TEXT, `deviceName` TEXT, `deviceCode` TEXT, `deviceAreaNum` TEXT, `deviceIndex` INTEGER NOT NULL, `itemNumber` TEXT, `content` TEXT, `claim` TEXT, `normalRange` TEXT, `defaultVal` TEXT, `unit` TEXT, `inputStandardCode` TEXT, `isPhone` INTEGER NOT NULL, `isAutoJudge` INTEGER NOT NULL, `sort` INTEGER NOT NULL, `realValue` TEXT, `concluse` TEXT, `skipReason` TEXT, `abnormalReason` TEXT, `remark` TEXT, `photoPath` TEXT, `finished` INTEGER NOT NULL, `uploaded` INTEGER NOT NULL, `dirty` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskTableNo",
+            "columnName": "taskTableNo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "areaId",
+            "columnName": "areaId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deviceId",
+            "columnName": "deviceId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deviceName",
+            "columnName": "deviceName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deviceCode",
+            "columnName": "deviceCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deviceAreaNum",
+            "columnName": "deviceAreaNum",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deviceIndex",
+            "columnName": "deviceIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "itemNumber",
+            "columnName": "itemNumber",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "claim",
+            "columnName": "claim",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "normalRange",
+            "columnName": "normalRange",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "defaultVal",
+            "columnName": "defaultVal",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "unit",
+            "columnName": "unit",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "inputStandardCode",
+            "columnName": "inputStandardCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isPhone",
+            "columnName": "isPhone",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isAutoJudge",
+            "columnName": "isAutoJudge",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sort",
+            "columnName": "sort",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "realValue",
+            "columnName": "realValue",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "concluse",
+            "columnName": "concluse",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "skipReason",
+            "columnName": "skipReason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "abnormalReason",
+            "columnName": "abnormalReason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "remark",
+            "columnName": "remark",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "photoPath",
+            "columnName": "photoPath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "finished",
+            "columnName": "finished",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uploaded",
+            "columnName": "uploaded",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dirty",
+            "columnName": "dirty",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '38a8cf620162ed627e25289d7b238a43')"
+    ]
+  }
+}

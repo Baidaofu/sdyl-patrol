@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  企业内网 原平台 使用自签证书，原 App 亦直接放行。
+  这里放开用户 CA，并由 OkHttp 侧提供宽松的 TrustManager（见 core/network/HttpClient.kt）。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
