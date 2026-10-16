@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -40,13 +41,22 @@ fun AppRoot() {
     if (!loggedIn) {
         LoginScreen(onLoggedIn = { loggedIn = true })
     } else {
-        MainScaffold(onLoggedOut = { loggedIn = false })
+        MainScaffold(onLoggedOut = {
+            // 换账号时清掉主页选中的日期，避免上一个账号的选日带到下一个账号
+            Graph.patrolSelectedDayStart = null
+            loggedIn = false
+        })
     }
 }
 
 @Composable
 private fun MainScaffold(onLoggedOut: () -> Unit) {
     var tab by remember { mutableStateOf(Tab.PATROL) }
+    // 用户反馈：在主页选好日期后切到「我的」再切回来就会跳回今天。
+    // 原因是 when(tab) 切走时整个子树的 remember/rememberSaveable 被丢掉，
+    // PatrolNav 的 NavController（连同它名下的 TaskListViewModel）被重建。
+    // 用 SaveableStateHolder 把每个标签页的 saveable 状态留住，切回来即恢复。
+    val tabStateHolder = rememberSaveableStateHolder()
     // 视频横屏时把底部导航栏收起来，让播放页真正铺满
     val hideBottomBar by UiMode.videoLandscape
 
@@ -75,10 +85,12 @@ private fun MainScaffold(onLoggedOut: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            when (tab) {
-                Tab.PATROL -> PatrolNav()
-                Tab.VIDEO -> VideoNav()
-                Tab.ME -> MeScreen(onLoggedOut = onLoggedOut)
+            tabStateHolder.SaveableStateProvider(tab.name) {
+                when (tab) {
+                    Tab.PATROL -> PatrolNav()
+                    Tab.VIDEO -> VideoNav()
+                    Tab.ME -> MeScreen(onLoggedOut = onLoggedOut)
+                }
             }
         }
     }

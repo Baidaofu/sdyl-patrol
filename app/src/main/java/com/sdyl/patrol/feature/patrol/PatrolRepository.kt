@@ -88,6 +88,9 @@ class PatrolRepository(
      * 传 null 表示不限时间——**只在用户显式选「全部日期」时这么用**，
      * 因为该账号 13368 条历史任务，全量拉取又慢又没意义。
      * [replaceAll]：先清空本地任务再写入（用于「全部日期」重新拉取的场景）。
+     * [hardRefresh]：**「更新」按钮的刷新语义** —— 除了 upsert 服务端返回的任务，
+     *   还把时间窗内「服务端已经不再返回」的本地旧缓存删掉（连带区域/设备/巡检项），
+     *   但保留本机动过还没上传的（见 [SessionStore.hasOfflineTimes] / areaDao.tasksWithLocalChanges）。
      */
     suspend fun syncTasks(
         taskStates: String?,
@@ -95,6 +98,7 @@ class PatrolRepository(
         windowStart: Long? = null,
         windowEnd: Long? = null,
         replaceAll: Boolean = false,
+        hardRefresh: Boolean = false,
     ): Result<Int> = runCatching {
         val body = GetTaskListRequest().apply {
             this.pageNo = 1
@@ -113,8 +117,46 @@ class PatrolRepository(
         }
         val tasks = unwrap(service().getTaskList(body)).items
         if (replaceAll) taskDao.clear()
+        // 「更新」按钮：先把时间窗内服务端已不再返回的旧缓存清掉，再落最新结果。
+        // 服务端返回的是当天权威列表，缓存里多出来的（已删除/已改到别天）留着只会显示错的。
+        if (hardRefresh && windowStart != null && windowEnd != null) {
+            purgeStaleInWindow(tasks, windowStart, windowEnd)
+        }
         cacheTasks(tasks)
         tasks.size
+    }
+
+    /**
+     * 强制刷新时清掉一个时间窗内的陈旧缓存。
+     *
+     * 只删「服务端这次没返回」且「本机没有任何未上传改动」的任务，
+     * 保证本地离线录入的数据不会被刷新冲掉。返回删除的任务数。
+     */
+    private suspend fun purgeStaleInWindow(
+        serverTasks: List<PatrolTask>,
+        windowStart: Long,
+        windowEnd: Long,
+    ): Int {
+        val serverNos = serverTasks.mapNotNull { it.tableNo }.toSet()
+        val localInWindow = taskDao.listByWindow(windowStart, windowEnd)
+            .mapNotNull { it.tableNo }
+            .filter { it.isNotBlank() && it !in serverNos }
+        if (localInWindow.isEmpty()) return 0
+        // 本机记过离线开始/收工、或区域里有未上传的签到 / 巡检项的，保留
+        val safe = localInWindow.filterNot { session.hasOfflineTimes(it) }
+        if (safe.isEmpty()) return 0
+        val dirty = areaDao.tasksWithLocalChanges(safe).toSet()
+        // 本机刚领取（还没来得及被服务端列表反映出来）的任务也不能删
+        val claimed = session.myClaimedTaskNos
+        val stale = safe.filterNot { it in dirty || it in claimed }
+        if (stale.isEmpty()) return 0
+        db.withTransaction {
+            workDao.deleteByTaskNos(stale)
+            deviceDao.deleteByTaskNos(stale)
+            areaDao.deleteByTaskNos(stale)
+            taskDao.deleteByTableNos(stale)
+        }
+        return stale.size
     }
 
     /**
@@ -567,25 +609,43 @@ class PatrolRepository(
     /**
      * 区域作业页的校验（用户 m12704）：把正要保存的[time]当成**该区域**的签到点，
      * 和其它区域的签到点一起过同一条规则链。
+     *
+     * 2026-10-16 修正（用户反馈「区域作业会根据服务器数据判断，导致本地的任务无法提交」）：
+     *  1. **不再拿服务端的实际开始/结束时间当判据**（`start/end` 传 0）。那两项往往是
+     *     服务端自己的时钟写的（比如计划 12:00~14:00，服务端实际开始却落在 12:00 之前），
+     *     本页根本改不了，却把「保存到本机 / 上传本区域」永久堵死。本页只负责一个巡检点，
+     *     应当只受计划窗口约束。
+     *  2. **只和本机改过、还没上传的巡检点比间隔**（[timePoints] 的 `localOnly`）。
+     *     服务端已经记下的历史签到点不是用户能在这页改的，不该拦住本地录入。
      */
     suspend fun validateSignTime(tableNo: String, areaId: String, time: Long): List<String> {
         val task = taskDao.byTableNo(tableNo)
         val area = areaDao.listByTask(tableNo).firstOrNull { it.id == areaId }
-        val others = timePoints(tableNo, excludeAreaId = areaId)
+        val others = timePoints(tableNo, excludeAreaId = areaId, localOnly = true)
         return TimeRules.check(
             planStart = task?.startTime ?: 0L,
             planEnd = task?.endTime ?: 0L,
-            start = task?.actualStartTime ?: 0L,
-            end = task?.actualEndTime ?: 0L,
+            start = 0L,
+            end = 0L,
             points = others + (time to (area?.name ?: "本区域")),
             fmt = ::taskTimeText,
         )
     }
 
-    /** 任务的巡检点（区域签到时间）；[excludeAreaId] 用于「只想比其它区域」的场合 */
-    private suspend fun timePoints(tableNo: String, excludeAreaId: String? = null): List<Pair<Long, String>> =
+    /**
+     * 任务的巡检点（区域签到时间）；[excludeAreaId] 用于「只想比其它区域」的场合。
+     *
+     * [localOnly] = true 时只取**本机签过到但还没上传**的区域——区域作业页的校验用它，
+     * 避免服务端已有的历史签到点（用户改不了）把本地录入堵死。
+     */
+    private suspend fun timePoints(
+        tableNo: String,
+        excludeAreaId: String? = null,
+        localOnly: Boolean = false,
+    ): List<Pair<Long, String>> =
         areaDao.listByTask(tableNo)
             .filter { it.id != excludeAreaId }
+            .filter { !localOnly || (it.isSigned && !it.isUpload) }
             .mapNotNull { a -> a.cardTime?.takeIf { it > 0L }?.let { it to (a.name ?: "区域") } }
             .sortedBy { it.first }
 
@@ -1160,6 +1220,10 @@ class PatrolRepository(
         local: AreaEntity? = null,
     ): AreaEntity {
         val localSigned = local?.isSigned == true
+        // 本机签到过、但还没上传到服务端的区域：本地那几个时间是**要算数的**，
+        // 同步时绝不能被服务端的旧值盖回去（用户本次反馈的「区域作业根据服务器数据判断」
+        // 根因之一：本地改好的巡检点时间刷新一次就被服务端的 cardTime 冲掉）。
+        val localPendingSign = localSigned && local?.isUpload == false
         val serverTypeId = payCardType?.id
         return AreaEntity(
             id = id ?: taskAreaId ?: "",
@@ -1178,13 +1242,17 @@ class PatrolRepository(
             // （实测：上传成功后一刷新就变回「未上传」）。所以 isUpload 只看本地：
             //  - 已有行：保留本地的值
             //  - 服务端刚插入的新行：本机什么都没动过，直接算「已上传」
-            //    （不然历史任务里「别人签过」的区域会全被算成「本机待上传」）
+            //    （不然历史任务里「别人签过」的区域会全被算作「本机待上传」）
             isUpload = local?.isUpload ?: true,
-            signStaffName = signStaffName ?: local?.takeIf { localSigned }?.signStaffName,
-            signStaffId = signStaffId ?: local?.takeIf { localSigned }?.signStaffId,
-            cardTime = cardTime ?: local?.takeIf { localSigned }?.cardTime,
+            signStaffName = if (localPendingSign) local?.signStaffName
+            else signStaffName ?: local?.takeIf { localSigned }?.signStaffName,
+            signStaffId = if (localPendingSign) local?.signStaffId
+            else signStaffId ?: local?.takeIf { localSigned }?.signStaffId,
+            cardTime = if (localPendingSign) local?.cardTime
+            else cardTime ?: local?.takeIf { localSigned }?.cardTime,
             signCode = signCode ?: local?.signCode,
-            signType = signTypeLabel?.takeIf { it.isNotBlank() }
+            signType = if (localPendingSign) local?.signType
+            else signTypeLabel?.takeIf { it.isNotBlank() }
                 ?: local?.takeIf { localSigned }?.signType,
             serverCardType = serverTypeId ?: local?.serverCardType,
             // 本机签到后本地写的签到方式优先，别被服务端的旧值盖回

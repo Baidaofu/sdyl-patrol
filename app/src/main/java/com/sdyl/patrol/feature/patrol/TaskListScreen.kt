@@ -82,6 +82,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 /* ------------------------------------------------------------------ *
  * 时段筛选已删除（用户 m15940：任务的时间间隔不止 2 小时——班长 4h、工程师 6h、
@@ -148,7 +149,11 @@ class TaskListViewModel : ViewModel() {
     private val filter = MutableStateFlow(TaskFilter.MINE)
     private val syncing = MutableStateFlow(false)
     private val error = MutableStateFlow<String?>(null)
-    private val dayStart = MutableStateFlow(dayStartOf(System.currentTimeMillis()))
+    // 用户反馈：选好日期 → 切「我的」→ 切回主页会跳回今天。
+    // 除了把 ViewModel 留住，这里再从进程级缓存恢复一次，双保险。
+    private val dayStart = MutableStateFlow(
+        Graph.patrolSelectedDayStart ?: dayStartOf(System.currentTimeMillis()),
+    )
 
     /** 本机记下「我领过的任务」（表里不带 executeUser，领取时自己记） */
     private val myClaimed = MutableStateFlow(Graph.session.myClaimedTaskNos)
@@ -208,7 +213,9 @@ class TaskListViewModel : ViewModel() {
     fun onFilterChange(f: TaskFilter) { filter.value = f }
 
     fun onDayChange(dayStartMillis: Long) {
-        dayStart.value = dayStartOf(dayStartMillis)
+        val day = dayStartOf(dayStartMillis)
+        dayStart.value = day
+        Graph.patrolSelectedDayStart = day
         sync()
     }
 
@@ -236,6 +243,9 @@ class TaskListViewModel : ViewModel() {
                 windowStart = winStart,
                 windowEnd = winEnd,
                 replaceAll = false,
+                // 「更新」按钮自带刷新：把服务端当天已不再返回的旧缓存清掉再落最新结果，
+                // 省得用户跑去「我的」清缓存（但本机未上传的改动会保留）。
+                hardRefresh = true,
             ).onFailure { e -> error.value = e.message ?: "同步失败（已显示本地缓存）" }
             myClaimed.value = Graph.session.myClaimedTaskNos
             // 用户 m05493：把服务端「我领的单」也并进「我的」（口径＝ acquirerId，见 repository）
@@ -290,12 +300,17 @@ fun TaskListScreen(onOpenTask: (TaskEntity) -> Unit) {
     }
 
     if (showPicker) {
-        val picker = rememberDatePickerState(initialSelectedDateMillis = state.dayStart)
+        // 用户反馈：每次点开日历默认选中都是已选日期的**前一天**。
+        // 根因：Material3 的 DatePicker 用的是 UTC 零点，而 state.dayStart 是本机时区零点，
+        // 东八区下本机零点 = UTC 前一天 16:00，于是日历显示成前一天。
+        val picker = rememberDatePickerState(
+            initialSelectedDateMillis = localDayToPickerUtc(state.dayStart),
+        )
         DatePickerDialog(
             onDismissRequest = { showPicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    picker.selectedDateMillis?.let { vm.onDayChange(it) }
+                    picker.selectedDateMillis?.let { vm.onDayChange(pickerUtcToLocalDay(it)) }
                     showPicker = false
                 }) { Text("确定") }
             },
@@ -762,6 +777,31 @@ internal fun dayStartOf(millis: Long): Long = Calendar.getInstance().apply {
     set(Calendar.SECOND, 0)
     set(Calendar.MILLISECOND, 0)
 }.timeInMillis
+
+/**
+ * 本机时区的「当天 00:00」→ Material3 `DatePickerState.selectedDateMillis` 要的
+ * **UTC 当天 00:00**。
+ *
+ * 修用户反馈的「日历默认选中前一天」：直接把本机零点（东八区 = 前一天 16:00Z）
+ * 传给 DatePicker，它按 UTC 解读就成了前一天。补上时区偏移即可。
+ */
+internal fun localDayToPickerUtc(dayStartMillis: Long): Long {
+    val day = dayStartOf(dayStartMillis)
+    return day + TimeZone.getDefault().getOffset(day)
+}
+
+/** [localDayToPickerUtc] 的逆运算：DatePicker 返回的 UTC 零点 → 本机时区当天 00:00 */
+internal fun pickerUtcToLocalDay(utcMillis: Long): Long {
+    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = utcMillis }
+    return Calendar.getInstance().apply {
+        clear()
+        set(
+            utc.get(Calendar.YEAR),
+            utc.get(Calendar.MONTH),
+            utc.get(Calendar.DAY_OF_MONTH),
+        )
+    }.timeInMillis
+}
 
 private fun dayLabel(dayStart: Long): String {
     val today = dayStartOf(System.currentTimeMillis())

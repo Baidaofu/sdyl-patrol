@@ -41,6 +41,15 @@ object Graph {
     lateinit var signStore: SignStore
         private set
 
+    /**
+     * 主页当前选中的日期（当天 00:00 时间戳），只放内存、不落盘。
+     *
+     * 修「在主页选好日期 → 切到『我的』→ 切回主页又跳回今天」：底部标签切换时
+     * PatrolNav / TaskListViewModel 可能被重建，靠这个进程级的值把选中的日期留住。
+     */
+    @Volatile
+    var patrolSelectedDayStart: Long? = null
+
     val isReady: Boolean get() = ::session.isInitialized
 
     fun init(app: Application) {

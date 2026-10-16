@@ -233,6 +233,14 @@ interface TaskDao {
     @Query("DELETE FROM task")
     suspend fun clear()
 
+    /** 选中日窗口内的任务（「更新」按钮强制刷新时用来找服务端已经不再返回的旧缓存） */
+    @Query("SELECT * FROM task WHERE startTime >= :start AND startTime < :end")
+    suspend fun listByWindow(start: Long, end: Long): List<TaskEntity>
+
+    /** 按任务号批量删除（强制刷新时清掉服务端已删除/已移出当天的旧缓存） */
+    @Query("DELETE FROM task WHERE tableNo IN (:tableNos)")
+    suspend fun deleteByTableNos(tableNos: List<String>)
+
     @Query("SELECT COUNT(*) FROM task")
     suspend fun count(): Int
 
@@ -318,6 +326,19 @@ interface AreaDao {
     @Query("DELETE FROM task_area")
     suspend fun clear()
 
+    @Query("DELETE FROM task_area WHERE taskTableNo IN (:tableNos)")
+    suspend fun deleteByTaskNos(tableNos: List<String>)
+
+    /**
+     * 这些任务里「本机动过还没上传」的区域 —— 强制刷新时这些任务不能删，
+     * 否则现场离线录入的签到 / 巡检项会被服务端旧数据顶掉甚至丢掉。
+     */
+    @Query(
+        "SELECT DISTINCT IFNULL(taskTableNo, '') FROM task_area WHERE taskTableNo IN (:tableNos) " +
+            "AND (isUpload = 0 OR EXISTS (SELECT 1 FROM work_item w WHERE w.areaId = task_area.id AND w.dirty = 1))",
+    )
+    suspend fun tasksWithLocalChanges(tableNos: List<String>): List<String>
+
     @Query("SELECT COUNT(*) FROM task_area")
     suspend fun count(): Int
 
@@ -378,6 +399,9 @@ interface DeviceDao {
 
     @Query("DELETE FROM task_device")
     suspend fun clear()
+
+    @Query("DELETE FROM task_device WHERE taskTableNo IN (:tableNos)")
+    suspend fun deleteByTaskNos(tableNos: List<String>)
 }
 
 @Dao
@@ -427,6 +451,9 @@ interface WorkItemDao {
 
     @Query("DELETE FROM work_item")
     suspend fun clear()
+
+    @Query("DELETE FROM work_item WHERE taskTableNo IN (:tableNos)")
+    suspend fun deleteByTaskNos(tableNos: List<String>)
 
     @Query("SELECT COUNT(*) FROM work_item")
     suspend fun count(): Int

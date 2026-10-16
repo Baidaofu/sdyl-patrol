@@ -1069,24 +1069,17 @@ fun MeScreen(onLoggedOut: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                }
-            }
 
-            /*
-             * 上报人员（用户 m07827）。
-             *
-             * `巡检任务.xlsx` 里「跟随用户固定」的就是这几个值：主表的
-             * 执行人/完成人（人员编码 + 员工姓名）、区域表的签到人、明细表的修改人。
-             * 默认跟随登录账号；要换成别人（代做）时在这里固定，巡检任务与上传都用它。
-             */
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(Modifier.padding(20.dp)) {
+                    /*
+                     * 上报人员（用户 m07827）——用户反馈：和上面的 imei / 手机号合并到同一组。
+                     *
+                     * `巡检任务.xlsx` 里「跟随用户固定」的就是这几个值：主表的
+                     * 执行人/完成人（人员编码 + 员工姓名）、区域表的签到人、明细表的修改人。
+                     * 默认跟随登录账号；要换成别人（代做）时在这里固定，巡检任务与上传都用它。
+                     */
+                    Spacer(Modifier.height(18.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Spacer(Modifier.height(18.dp))
                     Text("上报人员", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(6.dp))
                     Text(
