@@ -388,27 +388,48 @@ fun TaskDetailScreen(
     }
 
     if (showClaimConfirm) {
-        val isUnclaimed = task?.taskStateId == PatrolTaskState.NOT_ISSUED
+        val stateId = task?.taskStateId
+        val isUnclaimed = stateId == PatrolTaskState.NOT_ISSUED
+        val isIssued = stateId == PatrolTaskState.ISSUED
         AlertDialog(
             onDismissRequest = { showClaimConfirm = false },
-            title = { Text(if (isUnclaimed) "领取任务" else "取消领取") },
+            title = {
+                Text(
+                    when {
+                        isUnclaimed -> "领取任务"
+                        isIssued -> "取消领取"
+                        else -> "任务状态"
+                    },
+                )
+            },
             text = {
                 Text(
-                    if (isUnclaimed) {
-                        "确认领取这条任务？领取后就可以在区域作业页签到、录入巡检项。"
-                    } else {
-                        "这条任务当前是「已领取」。取消领取会把它退回「未领取」，其他人可以再领；" +
-                            "已经产生的本机签到/录入数据不会因此被删。"
+                    when {
+                        isUnclaimed ->
+                            "确认领取这条任务？领取后就可以在区域作业页签到、录入巡检项。"
+                        isIssued ->
+                            "这条任务当前是「已领取」。取消领取会把它退回「未领取」，其他人可以再领；" +
+                                "已经产生的本机签到/录入数据不会因此被删。"
+                        else ->
+                            "当前状态是「${PatrolTaskState.label(stateId)}」，不能领取或取消领取。"
                     },
                 )
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        showClaimConfirm = false
-                        if (isUnclaimed) vm.claimTask() else vm.unclaimTask()
-                    },
-                ) { Text(if (isUnclaimed) "确认领取" else "确认取消领取") }
+                when {
+                    isUnclaimed -> TextButton(
+                        onClick = {
+                            showClaimConfirm = false
+                            vm.claimTask()
+                        },
+                    ) { Text("确认领取") }
+                    isIssued -> TextButton(
+                        onClick = {
+                            showClaimConfirm = false
+                            vm.unclaimTask()
+                        },
+                    ) { Text("确认取消领取") }
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showClaimConfirm = false }) { Text("关闭") }
@@ -476,24 +497,20 @@ fun TaskDetailScreen(
                     }
                 },
                 actions = {
-                    // 用户要求：未领取 / 已领取都显示这个按钮，点开弹二次确认——
-                    // 未领取→领取，已领取→取消领取（用户 m15269 时代只显示未领取的）
-                    if (task?.taskStateId == PatrolTaskState.NOT_ISSUED ||
-                        task?.taskStateId == PatrolTaskState.ISSUED
+                    // 用户要求：这个按钮常驻 —— 未领取/已领取/执行中/已完成等所有状态都显示；
+                    // 点开弹二次确认：未领取→领取，已领取→取消领取，其它状态只做说明。
+                    IconButton(
+                        onClick = { showClaimConfirm = true },
+                        enabled = busy == null && !syncing && task != null,
                     ) {
-                        IconButton(
-                            onClick = { showClaimConfirm = true },
-                            enabled = busy == null && !syncing,
-                        ) {
-                            Icon(
-                                Icons.Filled.PlaylistAdd,
-                                contentDescription = if (task?.taskStateId == PatrolTaskState.NOT_ISSUED) {
-                                    "领取任务"
-                                } else {
-                                    "取消领取"
-                                },
-                            )
-                        }
+                        Icon(
+                            Icons.Filled.PlaylistAdd,
+                            contentDescription = if (task?.taskStateId == PatrolTaskState.ISSUED) {
+                                "取消领取"
+                            } else {
+                                "领取任务"
+                            },
+                        )
                     }
                     // 用户 m08202：开始任务 + 结束任务 两个小图标并排放在右上角，点开各自弹窗
                     IconButton(
@@ -621,7 +638,8 @@ private fun TaskActionBar(progress: PatrolRepository.TaskProgress?, busy: String
                 .padding(horizontal = 16.dp, vertical = 10.dp),
         ) {
             Text(
-                busy ?: progress?.summary ?: "正在统计完成情况…",
+                busy ?: progress?.let { "区域已签到 ${it.areaSigned}/${it.areaTotal}" }
+                    ?: "正在统计完成情况…",
                 style = MaterialTheme.typography.labelMedium,
                 color = if (busy != null) {
                     MaterialTheme.colorScheme.primary
@@ -629,15 +647,8 @@ private fun TaskActionBar(progress: PatrolRepository.TaskProgress?, busy: String
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
-            if (progress != null && !progress.allFinished) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "本机还有 ${progress.itemTotal - progress.itemFinished} 条巡检项没填完" +
-                        "（结束任务只改任务状态与时间，不影响它们）",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            // 用户反馈：「本机还有 N 条巡检项没填完」不准（本机只同步过打开过的区域，
+            // 没打开的区域的巡检项根本不在本机，所以这个数不是整单的真实完成度），已去掉。「巡检项已完成 0/0」同理。
             if (progress != null && !progress.allSigned) {
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -652,8 +663,6 @@ private fun TaskActionBar(progress: PatrolRepository.TaskProgress?, busy: String
 
 @Composable
 private fun AreaCard(area: AreaEntity, onClick: () -> Unit) {
-    val total = area.totalNum
-    val progress = if (total > 0) area.finishNum.toFloat() / total else 0f
     Card(
         onClick = onClick,
         shape = MaterialTheme.shapes.large,
@@ -700,19 +709,6 @@ private fun AreaCard(area: AreaEntity, onClick: () -> Unit) {
                         )
                     }
                 }
-            }
-            Spacer(Modifier.height(10.dp))
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
-            Row {
-                MetaText("完成", "${area.finishNum}/$total")
-                Spacer(Modifier.width(16.dp))
-                MetaText("异常", "${area.abnormalNum}")
-                Spacer(Modifier.width(16.dp))
-                MetaText("上传", if (area.isUpload) "已上传" else "未上传")
             }
         }
     }
