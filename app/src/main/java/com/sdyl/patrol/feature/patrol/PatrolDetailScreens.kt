@@ -47,6 +47,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -1000,13 +1001,24 @@ fun AreaWorkScreen(tableNo: String, areaId: String, onBack: () -> Unit) {
                                 .fillMaxWidth()
                                 .height(52.dp),
                         ) {
+                            // 转圈动画的错位问题（用户反馈）：原来空闲时只有文字、上传时多出一个转圈，
+                            // 文字会被挤着往右跳一下，看起来像“错位”。这里空闲态的领位图标与转圈都占
+                            // 同样 18dp 的位置，两种状态布局一模一样，文字不会移动。
                             if (uploading) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp,
+                                    // 跟随按钮内容色：禁用时与文字同为灰，不然会突然冒出一圈亮色
+                                    color = LocalContentColor.current,
                                 )
-                                Spacer(Modifier.width(8.dp))
+                            } else {
+                                Icon(
+                                    Icons.Filled.Upload,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
                             }
+                            Spacer(Modifier.width(8.dp))
                             Text(if (uploading) "正在上传…" else "上传本区域到服务端")
                         }
                     }
