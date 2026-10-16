@@ -199,6 +199,22 @@ class TaskDetailViewModel(private val tableNo: String) : ViewModel() {
     }
 
     /**
+     * 取消领取（用户要求）：与 [claimTask] 共用同一个确认弹窗，
+     * 把「已领取」退回「未领取」。见 [PatrolRepository.unclaimTasks]。
+     */
+    fun unclaimTask() {
+        if (busyLabel.value != null) return
+        busyLabel.value = "正在取消领取…"
+        viewModelScope.launch {
+            repo.unclaimTasks(listOf(tableNo))
+                .onSuccess { toast.value = "已取消领取" }
+                .onFailure { toast.value = "取消领取失败：${it.message}" }
+            busyLabel.value = null
+            reloadProgress()
+        }
+    }
+
+    /**
      * 上传任务：用户 m04603 要求「如果任务没有全部完成，则不要允许上传」。
      * 这里只做一次兜底——真正拒绝的逻辑在 [PatrolRepository.uploadTask] 里（本地也算得出来）。
      */
@@ -356,6 +372,8 @@ fun TaskDetailScreen(
     var showStart by remember { mutableStateOf(false) }
     var showFinish by remember { mutableStateOf(false) }
     var showPack by remember { mutableStateOf(false) }
+    // 领取/取消领取的二次确认弹窗（用户要求：右上角那不再是单纯一点就领的按钮）
+    var showClaimConfirm by remember { mutableStateOf(false) }
     val serverTimes by vm.serverTimes.collectAsStateWithLifecycle()
     val serverTimesLoading by vm.serverTimesLoading.collectAsStateWithLifecycle()
     val serverTimesError by vm.serverTimesError.collectAsStateWithLifecycle()
@@ -367,6 +385,35 @@ fun TaskDetailScreen(
             snackbar.showSnackbar(it)
             vm.consumeMessage()
         }
+    }
+
+    if (showClaimConfirm) {
+        val isUnclaimed = task?.taskStateId == PatrolTaskState.NOT_ISSUED
+        AlertDialog(
+            onDismissRequest = { showClaimConfirm = false },
+            title = { Text(if (isUnclaimed) "领取任务" else "取消领取") },
+            text = {
+                Text(
+                    if (isUnclaimed) {
+                        "确认领取这条任务？领取后就可以在区域作业页签到、录入巡检项。"
+                    } else {
+                        "这条任务当前是「已领取」。取消领取会把它退回「未领取」，其他人可以再领；" +
+                            "已经产生的本机签到/录入数据不会因此被删。"
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClaimConfirm = false
+                        if (isUnclaimed) vm.claimTask() else vm.unclaimTask()
+                    },
+                ) { Text(if (isUnclaimed) "确认领取" else "确认取消领取") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClaimConfirm = false }) { Text("关闭") }
+            },
+        )
     }
 
     if (showStart) {
@@ -429,14 +476,23 @@ fun TaskDetailScreen(
                     }
                 },
                 actions = {
-                    // 用户 m15269：只有「未领取」的任务才显示领取按钮——已领取/执行中/已完成
-                    // 再领没有意义（服务端也只接受未领取→已领取这一步）
-                    if (task?.taskStateId == PatrolTaskState.NOT_ISSUED) {
+                    // 用户要求：未领取 / 已领取都显示这个按钮，点开弹二次确认——
+                    // 未领取→领取，已领取→取消领取（用户 m15269 时代只显示未领取的）
+                    if (task?.taskStateId == PatrolTaskState.NOT_ISSUED ||
+                        task?.taskStateId == PatrolTaskState.ISSUED
+                    ) {
                         IconButton(
-                            onClick = vm::claimTask,
+                            onClick = { showClaimConfirm = true },
                             enabled = busy == null && !syncing,
                         ) {
-                            Icon(Icons.Filled.PlaylistAdd, contentDescription = "领取任务")
+                            Icon(
+                                Icons.Filled.PlaylistAdd,
+                                contentDescription = if (task?.taskStateId == PatrolTaskState.NOT_ISSUED) {
+                                    "领取任务"
+                                } else {
+                                    "取消领取"
+                                },
+                            )
                         }
                     }
                     // 用户 m08202：开始任务 + 结束任务 两个小图标并排放在右上角，点开各自弹窗

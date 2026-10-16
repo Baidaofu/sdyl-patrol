@@ -419,6 +419,12 @@ class SessionStore(context: Context) {
         myClaimedTaskNos = myClaimedTaskNos + tableNos
     }
 
+    /** 取消领取后要把本机这条「我领过的」记录也撒掉，否则主页「我的」还会挂着它 */
+    fun removeClaimedTasks(tableNos: Collection<String>) {
+        if (tableNos.isEmpty()) return
+        myClaimedTaskNos = myClaimedTaskNos - tableNos.toSet()
+    }
+
     val baseUrl: String get() = "${if (useHttps) "https" else "http"}://$serverHost"
 
     /** 原 App 的 BapServer 头，值是 host:port */

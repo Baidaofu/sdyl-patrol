@@ -1112,6 +1112,41 @@ class PatrolRepository(
         syncTasks(taskStates = null, keyword = null, replaceAll = false).getOrDefault(tableNos.size)
     }
 
+    /**
+     * **取消领取** —— 把「已领取」退回「未领取」（用户要求：任务详情页领取按钮做二次确认）。
+     *
+     * 与 [claimTasks] 同一个接口，只把 `changeState` 换成 `PATROL_taskState/notIssued`。
+     * 实测（2026-10-17，`patrolTask_20261016_2534`）：服务端接受
+     * （`{"code":200,"data":"SUCCESS"}`），并把 `acquirer` / `executeUser` /
+     * `statusChangeStaff` 一并清空（即回到没人领的状态）。
+     */
+    suspend fun unclaimTasks(tableNos: List<String>): Result<Int> = runCatching {
+        if (tableNos.isEmpty()) throw ApiException(0, "没有要取消领取的任务")
+        val ids = tableNos.mapNotNull { tableNo ->
+            taskDao.byTableNo(tableNo)?.taskId?.takeIf { it.isNotBlank() && it != "0" }
+        }
+        if (ids.isEmpty()) throw ApiException(0, "本地没有这些任务的服务端 ID，请先「获取任务」")
+
+        val body = mutableMapOf<String, Any?>(
+            "changeState" to PatrolTaskState.NOT_ISSUED,
+            "idList" to ids,
+        ).apply { putAll(logFields()) }
+        val response = service().claimTasks(body)
+        if (!response.isOk) throw ApiException(response.code, response.errorText)
+
+        // 本地先把任务置回「未领取」，再回拉一次对齐服务端
+        tableNos.forEach { tableNo ->
+            taskDao.updateState(
+                tableNo,
+                PatrolTaskState.NOT_ISSUED,
+                PatrolTaskState.label(PatrolTaskState.NOT_ISSUED),
+            )
+        }
+        // 本机「我领过的任务」记录也要撤掉，不然主页「我的」还会挂着这条未领取的单
+        session.removeClaimedTasks(tableNos)
+        syncTasks(taskStates = null, keyword = null, replaceAll = false).getOrDefault(tableNos.size)
+    }
+
     /* ------------------------- 上传 ------------------------- */
 
     /** 待上传（本机签过到或录入过、还没传成功）的区域列表 */
