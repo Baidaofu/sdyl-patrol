@@ -99,6 +99,28 @@ class UploadPayloadTest {
         assertEquals("5.2", bo.concluse)
     }
 
+    /**
+     * 「是否」型：用户在区域作业页点「是」（原始答案落本地 realValue），
+     * 载荷里必须带 `concluse="是"`，同时 `realValue` 是结论码。
+     */
+    @Test
+    fun `whether candidate answer is carried as concluse`() {
+        val yes = PatrolUploader.workBo(work(concluse = PatrolConclusion.NORMAL, realValue = "是"))
+        assertEquals("是", yes.concluse)
+        assertEquals(PatrolConclusion.NORMAL, yes.realValue?.id)
+
+        val no = PatrolUploader.workBo(work(concluse = PatrolConclusion.ABNORMAL, realValue = "否"))
+        assertEquals("否", no.concluse)
+        assertEquals(PatrolConclusion.ABNORMAL, no.realValue?.id)
+    }
+
+    /** 是否型候选值就是"是,否"（真机库实测 hex e698af2ce590a6），UI 据此渲染两个按钮 */
+    @Test
+    fun `whether candidates split into yes and no`() {
+        val candidates = "是,否".split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        assertEquals(listOf("是", "否"), candidates)
+    }
+
     @Test
     fun `normal conclusion clears abnormal reason and reason`() {
         val bo = PatrolUploader.workBo(

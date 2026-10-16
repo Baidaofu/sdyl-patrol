@@ -82,6 +82,7 @@ import com.sdyl.patrol.core.data.db.WorkItemEntity
 import com.sdyl.patrol.core.nfc.NfcBus
 import com.sdyl.patrol.feature.patrol.model.PatrolConclusion
 import com.sdyl.patrol.feature.patrol.model.PatrolTaskState
+import com.sdyl.patrol.feature.patrol.model.ResultEditMode
 import com.sdyl.patrol.feature.patrol.model.SignInPatch
 import com.sdyl.patrol.feature.patrol.model.WorkItemPatch
 import com.sdyl.patrol.feature.patrol.model.WorkItemState
@@ -1327,31 +1328,60 @@ private fun AreaItemEditor(item: WorkItemEntity, form: AreaWorkFormState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PatrolConclusion.all.forEach { (value, label) ->
-                FilterChip(
-                    selected = form.concl[item.id] == value,
-                    onClick = {
-                        form.concl = form.concl.toMutableMap().apply {
-                            this[item.id] = if (this[item.id] == value) null else value
-                        }
-                        form.touched = form.touched + item.id
-                    },
-                    label = { Text(label) },
-                )
+        // 「是否」型巡检项：直接选候选值（是/否），把用户选的原始答案写进 form.values
+        // （保存后落本地 realValue，上传时即 concluse），不再渲染结论按钮 + 实测值输入框。
+        val whetherCandidates = if (ResultEditMode.isWhether(item.editType, item.candidateValue)) {
+            item.candidateValue?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        } else {
+            emptyList()
+        }
+        if (whetherCandidates.isEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PatrolConclusion.all.forEach { (value, label) ->
+                    FilterChip(
+                        selected = form.concl[item.id] == value,
+                        onClick = {
+                            form.concl = form.concl.toMutableMap().apply {
+                                this[item.id] = if (this[item.id] == value) null else value
+                            }
+                            form.touched = form.touched + item.id
+                        },
+                        label = { Text(label) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            OutlinedTextField(
+                value = form.values[item.id].orEmpty(),
+                onValueChange = { v ->
+                    form.values = form.values.toMutableMap().apply { this[item.id] = v }
+                    form.touched = form.touched + item.id
+                },
+                label = { Text("实测值") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                whetherCandidates.forEach { candidate ->
+                    FilterChip(
+                        selected = form.values[item.id] == candidate,
+                        onClick = {
+                            form.values = form.values.toMutableMap().apply { this[item.id] = candidate }
+                            form.concl = form.concl.toMutableMap().apply {
+                                this[item.id] = if (candidate == "是" || candidate == "正常") {
+                                    PatrolConclusion.NORMAL
+                                } else {
+                                    PatrolConclusion.ABNORMAL
+                                }
+                            }
+                            form.touched = form.touched + item.id
+                        },
+                        label = { Text(candidate) },
+                    )
+                }
             }
         }
-        Spacer(Modifier.height(6.dp))
-        OutlinedTextField(
-            value = form.values[item.id].orEmpty(),
-            onValueChange = { v ->
-                form.values = form.values.toMutableMap().apply { this[item.id] = v }
-                form.touched = form.touched + item.id
-            },
-            label = { Text("实测值") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
         if (PatrolConclusion.isAbnormal(form.concl[item.id])) {
             Spacer(Modifier.height(6.dp))
             OutlinedTextField(
