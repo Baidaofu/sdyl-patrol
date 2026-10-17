@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  自适应图标的前景层：只保留白色对勾/横线，透明底，居中在安全区内。
+  背景由 @color/ic_launcher_background 提供，这样原生启动器按主题做圆形/方形遮罩时
+  不会出现「圆形+白边」的旧式图标效果。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="-2"
+        android:translateY="-5">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M30,34h48v7h-48z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M34,50l7,7l14,-16l5,4.5l-19,21.5l-12,-12z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M34,78h40v6h-40z" />
+    </group>
+</vector>

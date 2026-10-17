@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +26,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -44,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -52,6 +55,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sdyl.patrol.Graph
 import com.sdyl.patrol.core.data.db.AreaEntity
 import com.sdyl.patrol.core.data.db.TaskEntity
+import com.sdyl.patrol.core.data.db.WorkItemEntity
+import com.sdyl.patrol.feature.patrol.model.PatrolConclusion
+import com.sdyl.patrol.feature.patrol.model.ResultEditMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -111,6 +117,24 @@ class SimplifiedPatrolViewModel(private val tableNo: String) : ViewModel() {
     private val _signReason = MutableStateFlow("")
     val signReason = _signReason.asStateFlow()
 
+    /** 每个巡检点（区域）的巡检项明细，key = areaId（从本地库同步下来的） */
+    private val _areaItems = MutableStateFlow<Map<String, List<WorkItemEntity>>>(emptyMap())
+    val areaItems = _areaItems.asStateFlow()
+
+    /** 用户给每个巡检项选的「实际结果」（「是否」型就是 是/否），key = 巡检项 id */
+    private val _itemValues = MutableStateFlow<Map<String, String>>(emptyMap())
+    val itemValues = _itemValues.asStateFlow()
+
+    /** 与 [itemValues] 配套的结论码（正常/异常/可疑），key = 巡检项 id */
+    private val _itemConclusions = MutableStateFlow<Map<String, String>>(emptyMap())
+    val itemConclusions = _itemConclusions.asStateFlow()
+
+    /** 选一个巡检项的「实际结果」（用户要的是否/正常异常设置） */
+    fun pickItem(itemId: String, value: String, conclusion: String) {
+        _itemValues.value = _itemValues.value + (itemId to value)
+        _itemConclusions.value = _itemConclusions.value + (itemId to conclusion)
+    }
+
     init {
         reload()
         viewModelScope.launch {
@@ -119,18 +143,30 @@ class SimplifiedPatrolViewModel(private val tableNo: String) : ViewModel() {
                 val old = _areaTimes.value
                 val now = patrolDateTimeFormat.format(Date())
                 _areaTimes.value = list.associate { it.id to (old[it.id] ?: now) }
+                // 巡检项要先拉到本机，界面才能给出「实际结果」设置
+                loadAreaItems()
             }
+        }
+    }
+
+    /** 同步并读取每个区域的巡检项明细（供「实际结果」设置用） */
+    private fun loadAreaItems() {
+        viewModelScope.launch {
+            val map = LinkedHashMap<String, List<WorkItemEntity>>()
+            _areas.value.forEach { area ->
+                runCatching { repo.syncWorkItems(tableNo, area.id) }
+                map[area.id] = runCatching { Graph.db.workItemDao().listByArea(area.id) }
+                    .getOrDefault(emptyList())
+            }
+            _areaItems.value = map
         }
     }
 
     fun reload() {
         viewModelScope.launch {
             runCatching { Graph.db.taskDao().byTableNo(tableNo) }.getOrNull()?.let { _task.value = it }
-            // 巡检项要先拉到本机，一键提交时才算「完成」
-            _areas.value.forEach { area ->
-                runCatching { repo.syncWorkItems(tableNo, area.id) }
-            }
         }
+        loadAreaItems()
     }
 
     fun setStart(text: String) { _startText.value = text }
@@ -299,6 +335,23 @@ class SimplifiedPatrolViewModel(private val tableNo: String) : ViewModel() {
                     )
                     runCatching { repo.syncWorkItems(tableNo, area.id) }
                     repo.finishArea(tableNo, area.id, time).getOrThrow()
+                    // 用户选过的「实际结果」（是否/正常异常）覆盖默认的「正常」
+                    _areaItems.value[area.id].orEmpty().forEach { item ->
+                        val v = _itemValues.value[item.id] ?: return@forEach
+                        val c = _itemConclusions.value[item.id] ?: PatrolConclusion.NORMAL
+                        runCatching {
+                            repo.saveWorkItemResult(
+                                id = item.id,
+                                realValue = v,
+                                concluse = c,
+                                skipReason = null,
+                                abnormalReason = null,
+                                remark = null,
+                                staffId = staffId,
+                                staff = staffName,
+                            )
+                        }
+                    }
                 }
                 // 2. 本机把开始/结束时间钉死：zip 载荷的 actualStartTime/actualEndTime 取自本机任务行
                 _busy.value = "记录本机时间…"
@@ -336,6 +389,8 @@ fun SimplifiedPatrolScreen(
     val toast by vm.toast.collectAsStateWithLifecycle()
     val signType by vm.signType.collectAsStateWithLifecycle()
     val signReason by vm.signReason.collectAsStateWithLifecycle()
+    val areaItems by vm.areaItems.collectAsStateWithLifecycle()
+    val itemValues by vm.itemValues.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(toast) {
@@ -417,6 +472,12 @@ fun SimplifiedPatrolScreen(
                     onNow = { vm.setAreaTime(area.id, vm.nowText()) },
                     bad = parsePatrolTimeOrNull(areaTimes[area.id].orEmpty()) == null,
                 )
+                // 「实际结果」设置（用户要求）：是否型给 是/否，其它给 正常/异常/可疑
+                SimplifiedAreaItems(
+                    items = areaItems[area.id].orEmpty(),
+                    values = itemValues,
+                    onPick = vm::pickItem,
+                )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = vm::arrangeTimes) { Text("自动随机排实际开始 / 各巡检点 / 实际结束") }
@@ -473,14 +534,20 @@ fun SimplifiedPatrolScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 if (busy != null) {
+                    // 转圈错位修复：原来只设了 width(18dp)，内部默认高度 40dp → 又高又窄看着歪；
+                    // 改成和图标同样的 18dp 方形，颜色跟随按钮内容色（禁用时和文字一致）。
                     CircularProgressIndicator(
-                        Modifier.width(18.dp),
+                        Modifier.size(18.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
+                        color = LocalContentColor.current,
                     )
                     Spacer(Modifier.width(8.dp))
                 } else {
-                    Icon(Icons.Filled.CloudUpload, contentDescription = null)
+                    Icon(
+                        Icons.Filled.CloudUpload,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(busy ?: "上传并结束任务")
@@ -537,4 +604,66 @@ private fun TimeField(
         onNow = onNow,
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/**
+ * 简化巡检里每个巡检点的「实际结果」设置（用户要求）。
+ *
+ * - 「是否」型：直接选 是 / 否（就是用户点名要的那个）；
+ * - 其它型：选 正常 / 异常 / 可疑（与区域作业页一致）。
+ *
+ * 不选就按默认「正常」上传（保持原先一键提交的行为）。
+ */
+@Composable
+private fun SimplifiedAreaItems(
+    items: List<WorkItemEntity>,
+    values: Map<String, String>,
+    onPick: (String, String, String) -> Unit,
+) {
+    if (items.isEmpty()) return
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items.forEach { item ->
+            val candidates = if (ResultEditMode.isWhether(item.editType, item.candidateValue)) {
+                item.candidateValue?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+            } else {
+                emptyList()
+            }
+            val options: List<Pair<String, String>> = if (candidates.isNotEmpty()) {
+                candidates.map { c ->
+                    c to if (c == "是" || c == "正常") PatrolConclusion.NORMAL
+                    else PatrolConclusion.ABNORMAL
+                }
+            } else {
+                listOf(
+                    "正常" to PatrolConclusion.NORMAL,
+                    "异常" to PatrolConclusion.ABNORMAL,
+                    "可疑" to PatrolConclusion.DOUBTFUL,
+                )
+            }
+            Column(Modifier.fillMaxWidth()) {
+                Text(
+                    item.content ?: "巡检项",
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    options.forEach { (label, conclusion) ->
+                        FilterChip(
+                            selected = values[item.id] == label,
+                            onClick = { onPick(item.id, label, conclusion) },
+                            label = { Text(label) },
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
