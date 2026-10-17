@@ -1021,7 +1021,7 @@ fun AreaWorkScreen(tableNo: String, areaId: String, onBack: () -> Unit) {
                                     vm.saveAreaWork(sign, form.patches(items))
                                 }
                             },
-                            enabled = signIssues.isEmpty(),
+                            enabled = true,
                             shape = MaterialTheme.shapes.extraLarge,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1031,8 +1031,8 @@ fun AreaWorkScreen(tableNo: String, areaId: String, onBack: () -> Unit) {
                     item(key = "__upload__") {
                         OutlinedButton(
                             onClick = vm::uploadArea,
-                            // 时间不合法时连上传也挡住：否则用户以为刚改的时间跟着走了，其实传的是库里旧的
-                            enabled = !uploading && signIssues.isEmpty(),
+                            // 时间检测只提醒、不阻上传（用户要求）——否则用户以为刚改的时间跟着走了，其实传的是库里旧的
+                            enabled = !uploading,
                             shape = MaterialTheme.shapes.extraLarge,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1626,6 +1626,8 @@ private fun StartTaskDialog(
     var upload by remember { mutableStateOf(false) }
     /** 用户 m14803：勾了就要求服务端把「延迟开始原因」覆盖为空 */
     var clearDelay by remember { mutableStateOf(false) }
+    // 二次确认（用户要求）：开始任务会真实把实际开始时间写到服务端，必须再确认一次
+    var showConfirm by remember { mutableStateOf(false) }
     var issues by remember { mutableStateOf<List<String>>(emptyList()) }
     var checking by remember { mutableStateOf(false) }
     val parsed = parsePatrolTimeOrNull(timeText)
@@ -1685,12 +1687,54 @@ private fun StartTaskDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { parsed?.let { onConfirm(it, upload, clearDelay) } },
-                enabled = parsed != null && issues.isEmpty() && !checking && !busy,
+                // 时间检测只提醒、不拦截；真正开始前再弹一次二次确认
+                onClick = { if (parsed != null) showConfirm = true },
+                enabled = parsed != null && !checking && !busy,
             ) { Text("确定开始") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
+
+    // 二次确认（用户要求）：开始任务会把实际开始时间真实记录到服务端，不能以本地为准
+    if (showConfirm) {
+        AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            title = { Text("确认开始任务") },
+            text = {
+                Column {
+                    Text(
+                        "开始任务会把「实际开始时间」真实记录到服务端，之后不可覆盖（以服务端记录为准）。",
+                    )
+                    if (issues.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "当前仍有 ${issues.size} 条时间提醒：",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        issues.forEach { line ->
+                            Text(
+                                "• $line",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showConfirm = false
+                        parsed?.let { onConfirm(it, upload, clearDelay) }
+                    },
+                ) { Text("确认开始") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirm = false }) { Text("返回") }
+            },
+        )
+    }
 }
 
 /**
@@ -1824,7 +1868,8 @@ private fun FinishTaskDialog(
         confirmButton = {
             TextButton(
                 onClick = { if (end != null) onConfirm(end, upload, clearDelay) },
-                enabled = end != null && issues.isEmpty() && !checking && !busy,
+                // 时间检测只提醒、不阻上传（用户要求）
+                enabled = end != null && !checking && !busy,
             ) { Text("确定结束") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },

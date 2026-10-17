@@ -271,7 +271,7 @@ class SimplifiedPatrolViewModel(private val tableNo: String) : ViewModel() {
         }
         _busy.value = "正在写入本机…"
         viewModelScope.launch {
-            // 用户 m12704：与「开始任务 / 签到 / 提交任务」共用同一套规则；不通过就提示，不写本机也不上传
+            // 用户要求：时间检测只提醒、不阻上传 —— 有问题也继续，先把提醒抛出来
             val issues = runCatching {
                 repo.validateTaskTimesWithPoints(
                     tableNo = tableNo,
@@ -281,9 +281,7 @@ class SimplifiedPatrolViewModel(private val tableNo: String) : ViewModel() {
                 )
             }.getOrDefault(emptyList())
             if (issues.isNotEmpty()) {
-                _toast.value = issues.first()
-                _busy.value = null
-                return@launch
+                _toast.value = "时间提醒：" + issues.first()
             }
             val staffName = Graph.session.reporterDisplayName
             val staffId = Graph.session.reporterRefId
