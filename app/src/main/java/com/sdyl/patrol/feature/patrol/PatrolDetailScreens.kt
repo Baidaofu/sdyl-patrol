@@ -487,7 +487,7 @@ fun TaskDetailScreen(
             onDismiss = { showPack = false },
             onConfirm = {
                 showPack = false
-                vm.packSubmit()
+                requestUpload { vm.packSubmit() }
             },
         )
     }
