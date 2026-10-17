@@ -375,6 +375,13 @@ fun TaskDetailScreen(
     var showPack by remember { mutableStateOf(false) }
     // 领取/取消领取的二次确认弹窗（用户要求：右上角那不再是单纯一点就领的按钮）
     var showClaimConfirm by remember { mutableStateOf(false) }
+    // 用户要求：所有写服务器的上传/状态变更都加一道「最后修改时间不可覆盖」二次提示
+    var showUploadWarning by remember { mutableStateOf(false) }
+    var pendingUpload by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun requestUpload(action: () -> Unit) {
+        pendingUpload = action
+        showUploadWarning = true
+    }
     val serverTimes by vm.serverTimes.collectAsStateWithLifecycle()
     val serverTimesLoading by vm.serverTimesLoading.collectAsStateWithLifecycle()
     val serverTimesError by vm.serverTimesError.collectAsStateWithLifecycle()
@@ -410,12 +417,27 @@ fun TaskDetailScreen(
                 TextButton(
                     onClick = {
                         showClaimConfirm = false
-                        if (isUnclaimed) vm.claimTask() else vm.unclaimTask()
+                        requestUpload { if (isUnclaimed) vm.claimTask() else vm.unclaimTask() }
                     },
                 ) { Text(if (isUnclaimed) "确认领取" else "确认退回未领取") }
             },
             dismissButton = {
                 TextButton(onClick = { showClaimConfirm = false }) { Text("关闭") }
+            },
+        )
+    }
+
+    if (showUploadWarning) {
+        UploadWarningDialog(
+            onConfirm = {
+                val action = pendingUpload
+                pendingUpload = null
+                showUploadWarning = false
+                action?.invoke()
+            },
+            onDismiss = {
+                pendingUpload = null
+                showUploadWarning = false
             },
         )
     }
@@ -433,7 +455,7 @@ fun TaskDetailScreen(
             },
             onConfirm = { time, upload, clearDelay ->
                 showStart = false
-                vm.startTask(time, upload, clearDelay)
+                requestUpload { vm.startTask(time, upload, clearDelay) }
             },
         )
     }
@@ -448,7 +470,7 @@ fun TaskDetailScreen(
             onDismiss = { showFinish = false },
             onConfirm = { end, upload, clearDelay ->
                 showFinish = false
-                vm.finishTask(end, upload, clearDelay)
+                requestUpload { vm.finishTask(end, upload, clearDelay) }
             },
         )
     }
@@ -876,8 +898,8 @@ fun AreaWorkScreen(tableNo: String, areaId: String, onBack: () -> Unit) {
     val uploading by vm.isUploading.collectAsStateWithLifecycle()
     val toast by vm.toast.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-
-    // 用户 m07648：区域页只保留「录入/修改」与「上传本区域到服务端」两件事。
+    // 用户要求：上传本区域前先弹「最后修改时间不可覆盖」二次提示
+    var showUploadWarning by remember { mutableStateOf(false) }
     // 用户 m12413：录入不再开弹窗 —— 表单直接长在页面里（见下方 AreaSignCard / AreaItemEditor）。
 
     LaunchedEffect(toast) {
@@ -885,6 +907,16 @@ fun AreaWorkScreen(tableNo: String, areaId: String, onBack: () -> Unit) {
             snackbar.showSnackbar(it)
             vm.consumeToast()
         }
+    }
+
+    if (showUploadWarning) {
+        UploadWarningDialog(
+            onConfirm = {
+                showUploadWarning = false
+                vm.uploadArea()
+            },
+            onDismiss = { showUploadWarning = false },
+        )
     }
 
     Scaffold(
@@ -1030,7 +1062,7 @@ fun AreaWorkScreen(tableNo: String, areaId: String, onBack: () -> Unit) {
                     }
                     item(key = "__upload__") {
                         OutlinedButton(
-                            onClick = vm::uploadArea,
+                            onClick = { showUploadWarning = true },
                             // 时间检测只提醒、不阻上传（用户要求）——否则用户以为刚改的时间跟着走了，其实传的是库里旧的
                             enabled = !uploading,
                             shape = MaterialTheme.shapes.extraLarge,
@@ -1636,6 +1668,29 @@ internal fun parsePatrolTimeOrNull(text: String): Long? {
 /** 严格解析（非宽松）：2026-13-45 这种也会被判非法 */
 private val strictTimeFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.CHINA)
     .apply { isLenient = false }
+
+/**
+ * 通用的「上传前二次提示」（用户要求）：所有会写服务器的上传/状态变更都先弹这个。
+ */
+@Composable
+internal fun UploadWarningDialog(
+    title: String = "上传确认",
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Text(
+                "上传后，服务器会记录本区域任务和巡检任务的「最后修改时间」，" +
+                    "此时间无法在本地修改覆盖。",
+            )
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("确认上传") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
 
 @Composable
 private fun StartTaskDialog(
