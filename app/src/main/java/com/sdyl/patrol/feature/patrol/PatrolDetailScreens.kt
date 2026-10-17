@@ -26,13 +26,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.AssignmentReturn
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.HowToReg
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
@@ -390,46 +391,28 @@ fun TaskDetailScreen(
     if (showClaimConfirm) {
         val stateId = task?.taskStateId
         val isUnclaimed = stateId == PatrolTaskState.NOT_ISSUED
-        val isIssued = stateId == PatrolTaskState.ISSUED
         AlertDialog(
             onDismissRequest = { showClaimConfirm = false },
-            title = {
-                Text(
-                    when {
-                        isUnclaimed -> "领取任务"
-                        isIssued -> "取消领取"
-                        else -> "任务状态"
-                    },
-                )
-            },
+            title = { Text(if (isUnclaimed) "领取任务" else "取消领取") },
             text = {
                 Text(
-                    when {
-                        isUnclaimed ->
-                            "确认领取这条任务？领取后就可以在区域作业页签到、录入巡检项。"
-                        isIssued ->
-                            "这条任务当前是「已领取」。取消领取会把它退回「未领取」，其他人可以再领；" +
-                                "已经产生的本机签到/录入数据不会因此被删。"
-                        else ->
-                            "当前状态是「${PatrolTaskState.label(stateId)}」，不能领取或取消领取。"
+                    if (isUnclaimed) {
+                        "确认领取这条任务？领取后就可以在区域作业页签到、录入巡检项。"
+                    } else {
+                        "把这条任务退回「未领取」状态？\n\n" +
+                            "当前状态：${PatrolTaskState.label(stateId)}\n" +
+                            "退回后任务重新变成「未领取」，其他人可以再领；" +
+                            "已完成的任务退回，会连同各区域的签到时间和完成进度一起重置。"
                     },
                 )
             },
             confirmButton = {
-                when {
-                    isUnclaimed -> TextButton(
-                        onClick = {
-                            showClaimConfirm = false
-                            vm.claimTask()
-                        },
-                    ) { Text("确认领取") }
-                    isIssued -> TextButton(
-                        onClick = {
-                            showClaimConfirm = false
-                            vm.unclaimTask()
-                        },
-                    ) { Text("确认取消领取") }
-                }
+                TextButton(
+                    onClick = {
+                        showClaimConfirm = false
+                        if (isUnclaimed) vm.claimTask() else vm.unclaimTask()
+                    },
+                ) { Text(if (isUnclaimed) "确认领取" else "确认退回未领取") }
             },
             dismissButton = {
                 TextButton(onClick = { showClaimConfirm = false }) { Text("关闭") }
@@ -503,13 +486,15 @@ fun TaskDetailScreen(
                         onClick = { showClaimConfirm = true },
                         enabled = busy == null && !syncing && task != null,
                     ) {
+                        // 图标跟随当前动作：未领取→领取（登记）；其它状态→退回未领取（工单退回）
+                        val claimable = task?.taskStateId == PatrolTaskState.NOT_ISSUED
                         Icon(
-                            Icons.Filled.PlaylistAdd,
-                            contentDescription = if (task?.taskStateId == PatrolTaskState.ISSUED) {
-                                "取消领取"
+                            imageVector = if (claimable) {
+                                Icons.Filled.HowToReg
                             } else {
-                                "领取任务"
+                                Icons.AutoMirrored.Filled.AssignmentReturn
                             },
+                            contentDescription = if (claimable) "领取任务" else "退回未领取",
                         )
                     }
                     // 用户 m08202：开始任务 + 结束任务 两个小图标并排放在右上角，点开各自弹窗
