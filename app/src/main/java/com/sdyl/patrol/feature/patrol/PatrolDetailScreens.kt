@@ -1276,7 +1276,16 @@ private class AreaWorkFormState(
 
     /* ---- 每条巡检项的本地结论 ---- */
     var values: Map<String, String> by mutableStateOf(
-        items.associate { it.id to (it.realValue ?: it.defaultVal.orEmpty()) },
+        items.associate { item ->
+            val existing = item.realValue?.takeIf { it.isNotBlank() }
+            // 用户要求：「是否」型巡检结果默认选「是」（已填过的沿用原值）
+            val def = existing ?: run {
+                val whether = ResultEditMode.isWhether(item.editType, item.candidateValue)
+                if (whether && item.candidateValue?.contains("是") == true) "是"
+                else item.defaultVal.orEmpty()
+            }
+            item.id to def
+        },
     )
     var concl: Map<String, String?> by mutableStateOf(
         // 用户 m07745：默认勾选「正常」（已经点过结论的沿用原值；再点一次可取消=不记录）
@@ -1349,6 +1358,19 @@ private fun rememberAreaWorkFormState(
 /**
  * 单条巡检项的就地编辑卡片（用户 m12413：字段直接摊在区域作业页里，不再弹窗）。
  */
+/**
+ * 把巡检项内容按「1、2、3、」这类序号拆成多行（用户要求：不要挤成一行，按序号分行）。
+ * 没有序号就整段当一行。
+ */
+internal fun splitNumberedContent(content: String?): List<String> {
+    val text = content?.trim().orEmpty()
+    if (text.isEmpty()) return emptyList()
+    return text.split(Regex("(?=\\d+、)"))
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .ifEmpty { listOf(text) }
+}
+
 @Composable
 private fun AreaItemEditor(item: WorkItemEntity, form: AreaWorkFormState) {
     // 用户反馈：巡检项的左右宽度缩进不正常、过于贴边 —— 外层卡片有 16dp 内边距，
@@ -1360,11 +1382,17 @@ private fun AreaItemEditor(item: WorkItemEntity, form: AreaWorkFormState) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                item.content ?: "巡检项",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
+            // 用户要求：巡检项不要挤成一行，按「1、2、3、」序号分行显示
+            Column(Modifier.weight(1f)) {
+                val lines = remember(item.content) { splitNumberedContent(item.content) }
+                if (lines.isEmpty()) {
+                    Text("巡检项", style = MaterialTheme.typography.bodyLarge)
+                } else {
+                    lines.forEach { line ->
+                        Text(line, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
             if (item.finished) {
                 Text(
                     "已填",

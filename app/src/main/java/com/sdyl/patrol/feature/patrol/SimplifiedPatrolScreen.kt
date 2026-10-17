@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -28,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
@@ -159,6 +161,18 @@ class SimplifiedPatrolViewModel(private val tableNo: String) : ViewModel() {
                     .getOrDefault(emptyList())
             }
             _areaItems.value = map
+            // 用户要求：巡检结果默认都选「是」（是否型）；其它型默认「正常」
+            val values = _itemValues.value.toMutableMap()
+            val conclusions = _itemConclusions.value.toMutableMap()
+            map.values.flatten().forEach { item ->
+                if (values.containsKey(item.id)) return@forEach
+                val isWhether = ResultEditMode.isWhether(item.editType, item.candidateValue)
+                val def = if (isWhether && item.candidateValue?.contains("是") == true) "是" else "正常"
+                values[item.id] = def
+                conclusions[item.id] = PatrolConclusion.NORMAL
+            }
+            _itemValues.value = values
+            _itemConclusions.value = conclusions
         }
     }
 
@@ -479,9 +493,6 @@ fun SimplifiedPatrolScreen(
                     onPick = vm::pickItem,
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = vm::arrangeTimes) { Text("自动随机排实际开始 / 各巡检点 / 实际结束") }
-            }
 
             TimeField(
                 label = "设置结束任务时间",
@@ -490,6 +501,23 @@ fun SimplifiedPatrolScreen(
                 onNow = { vm.setEnd(vm.nowText()) },
                 bad = endMs == null,
             )
+
+            // 用户要求：挪到「设置结束任务时间」下面，并做得明显一些（原来是灰灰的文字按钮）
+            OutlinedButton(
+                onClick = vm::arrangeTimes,
+                shape = MaterialTheme.shapes.extraLarge,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Shuffle,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("自动随机排实际开始 / 各巡检点 / 实际结束")
+            }
 
             // 签到方式：跟常规区域作业面板一致，默认 NFC刷卡签到；手动签到必须填原因（用户 m04138）
             Column {
@@ -627,7 +655,8 @@ private fun SimplifiedAreaItems(
             .padding(start = 12.dp, bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items.forEach { item ->
+        // 用户要求：简化页**不显示巡检项具体内容**，只留序号 + 结果选择
+        items.forEachIndexed { index, item ->
             val candidates = if (ResultEditMode.isWhether(item.editType, item.candidateValue)) {
                 item.candidateValue?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
             } else {
@@ -645,23 +674,22 @@ private fun SimplifiedAreaItems(
                     "可疑" to PatrolConclusion.DOUBTFUL,
                 )
             }
-            Column(Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text(
-                    item.content ?: "巡检项",
+                    "${index + 1}.",
                     style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    options.forEach { (label, conclusion) ->
-                        FilterChip(
-                            selected = values[item.id] == label,
-                            onClick = { onPick(item.id, label, conclusion) },
-                            label = { Text(label) },
-                        )
-                    }
+                options.forEach { (label, conclusion) ->
+                    FilterChip(
+                        selected = values[item.id] == label,
+                        onClick = { onPick(item.id, label, conclusion) },
+                        label = { Text(label) },
+                    )
                 }
             }
         }
