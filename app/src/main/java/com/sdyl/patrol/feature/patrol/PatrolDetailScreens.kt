@@ -1366,7 +1366,14 @@ private fun rememberAreaWorkFormState(
  */
 @Composable
 private fun AreaItemEditor(item: WorkItemEntity, form: AreaWorkFormState) {
-    Column(Modifier.fillMaxWidth()) {
+    // 用户反馈：巡检项的左右宽度缩进不正常、过于贴边 —— 外层卡片有 16dp 内边距，
+    // 但这条内容自己没加左右间距，文字/输入框直接顶到卡片圆角边。
+    // 这里补上与设备标题一致的左右 16dp、上下 12dp。
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 item.content ?: "巡检项",
