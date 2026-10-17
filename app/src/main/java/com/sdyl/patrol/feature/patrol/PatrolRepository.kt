@@ -1116,9 +1116,11 @@ class PatrolRepository(
      * **取消领取** —— 把「已领取」退回「未领取」（用户要求：任务详情页领取按钮做二次确认）。
      *
      * 与 [claimTasks] 同一个接口，只把 `changeState` 换成 `PATROL_taskState/notIssued`。
-     * 实测（2026-10-17，`patrolTask_20261016_2534`）：服务端接受
-     * （`{"code":200,"data":"SUCCESS"}`），并把 `acquirer` / `executeUser` /
-     * `statusChangeStaff` 一并清空（即回到没人领的状态）。
+     * 实测（2026-10-17）：服务端接受（`{"code":200,"data":"SUCCESS"}`），任务回到「未领取」
+     * （已完成的任务会被一并重置：区域 finishNum 归 0、cardTime 清空）。
+     *
+     * 注意：**领取人 / 状态变更人不会因此清空** —— 实测 2580 退回后，按 `acquirerId=李梓瑜`
+     * 仍能查到它；之后任何人再领取时，服务端会把状态变更人覆盖成新的调用人。
      */
     suspend fun unclaimTasks(tableNos: List<String>): Result<Int> = runCatching {
         if (tableNos.isEmpty()) throw ApiException(0, "没有要取消领取的任务")
